@@ -1,7 +1,23 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import GlobalSearch from './components/GlobalSearch.jsx'
 import { WatchlistProvider } from './watchctx.jsx'
+
+// Grouped nav: a top-level label that reveals a dropdown on hover/focus. Highlights when one of
+// its routes is active. Keeps the top bar to a handful of items instead of ~20 wrapping links.
+function NavGroup({ label, items, pathname }) {
+  const active = items.some((it) => pathname === it.to || pathname.startsWith(it.to + '/'))
+  return (
+    <div className="navgroup">
+      <button type="button" className={`navgroup-label ${active ? 'active' : ''}`}>
+        {label} <span className="caret" aria-hidden="true">▾</span>
+      </button>
+      <div className="navgroup-menu">
+        {items.map((it) => <NavLink key={it.to} to={it.to}>{it.label}</NavLink>)}
+      </div>
+    </div>
+  )
+}
 
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
 const Feed = lazy(() => import('./pages/Feed.jsx'))
@@ -31,33 +47,44 @@ const Methodology = lazy(() => import('./pages/Methodology.jsx'))
 
 export default function App() {
   const publicSite = window.CONGRESS_TRADES_CONFIG?.publicSite === true
+  const { pathname } = useLocation()
 
   return (
     <WatchlistProvider>
       <header className="topbar">
         <span className="brand">🏛️ Congress Trades</span>
         <nav>
-          <NavLink to="/" end>Dashboard</NavLink>
-          <NavLink to="/ideas">Ideas</NavLink>
-          <NavLink to="/discover">Discover</NavLink>
-          <NavLink to="/options">Options</NavLink>
-          <NavLink to="/strategies">Strategies</NavLink>
-          <NavLink to="/feed">Feed</NavLink>
-          <NavLink to="/signals">Signals</NavLink>
-          <NavLink to="/research">Research</NavLink>
-          <NavLink to="/alerts">Alerts</NavLink>
-          <NavLink to="/lag">Lag</NavLink>
-          <NavLink to="/leaderboard">Leaderboard</NavLink>
-          <NavLink to="/policy">Policy</NavLink>
-          <NavLink to="/committees">Committees</NavLink>
-          <NavLink to="/members">Members</NavLink>
-          <NavLink to="/compare">Compare</NavLink>
-          <NavLink to="/tickers">Tickers</NavLink>
-          {!publicSite && <NavLink to="/portfolio">Portfolio</NavLink>}
-          <NavLink to="/watchlist">Watchlist</NavLink>
-          <NavLink to="/sources">Sources</NavLink>
-          <NavLink to="/about">About</NavLink>
-          <NavLink to="/status">Status</NavLink>
+          <NavLink to="/" end className="navlink">Dashboard</NavLink>
+          <NavGroup label="Trades" pathname={pathname} items={[
+            { to: '/feed', label: 'Feed' },
+            { to: '/discover', label: 'Discover' },
+            { to: '/options', label: 'Options' },
+            { to: '/research', label: 'Unusual activity' },
+            { to: '/signals', label: 'Signals' },
+            { to: '/ideas', label: 'Ideas' },
+          ]} />
+          <NavGroup label="Analysis" pathname={pathname} items={[
+            { to: '/strategies', label: 'Strategies' },
+            { to: '/leaderboard', label: 'Leaderboard' },
+            { to: '/lag', label: 'Disclosure lag' },
+            { to: '/policy', label: 'Policy context' },
+            { to: '/committees', label: 'Committees' },
+          ]} />
+          <NavGroup label="Browse" pathname={pathname} items={[
+            { to: '/members', label: 'Members' },
+            { to: '/compare', label: 'Compare' },
+            { to: '/tickers', label: 'Tickers' },
+          ]} />
+          <NavGroup label="You" pathname={pathname} items={[
+            { to: '/watchlist', label: 'Watchlist' },
+            { to: '/alerts', label: 'Alerts' },
+            ...(!publicSite ? [{ to: '/portfolio', label: 'Portfolio' }] : []),
+          ]} />
+          <NavGroup label="About" pathname={pathname} items={[
+            { to: '/sources', label: 'Sources' },
+            { to: '/about', label: 'Methodology' },
+            { to: '/status', label: 'Status' },
+          ]} />
         </nav>
         <GlobalSearch />
       </header>

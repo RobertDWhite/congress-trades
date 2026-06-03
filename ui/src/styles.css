@@ -50,8 +50,30 @@ header.topbar {
   z-index: 10;
 }
 header.topbar .brand { font-weight: 700; font-size: 16px; }
-header.topbar nav { display: flex; gap: 16px; flex-wrap: wrap; }
-header.topbar nav a.active { color: var(--text); font-weight: 600; }
+header.topbar nav { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; }
+
+/* top-level nav items: Dashboard link + dropdown group labels */
+.navlink, .navgroup-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 10px; border-radius: 6px; color: var(--muted);
+  background: none; border: 0; font: inherit; line-height: 1; cursor: pointer; white-space: nowrap;
+}
+.navlink:hover, .navgroup-label:hover { color: var(--text); background: var(--accent-dim); text-decoration: none; }
+.navlink.active, .navgroup-label.active { color: var(--text); font-weight: 600; }
+.navgroup .caret { font-size: 9px; opacity: .6; }
+
+/* dropdown */
+.navgroup { position: relative; }
+.navgroup-menu {
+  position: absolute; top: 100%; left: 0; min-width: 188px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 6px; z-index: 30;
+  display: none; flex-direction: column; gap: 1px;
+}
+.navgroup:hover .navgroup-menu, .navgroup:focus-within .navgroup-menu { display: flex; }
+.navgroup-menu a { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); font-weight: 400; white-space: nowrap; }
+.navgroup-menu a:hover { background: var(--accent-dim); text-decoration: none; }
+.navgroup-menu a.active { color: var(--accent); font-weight: 600; }
 
 main { padding: 20px; max-width: 1200px; margin: 0 auto; }
 
@@ -168,7 +190,7 @@ thead th { position: sticky; top: 0; background: var(--panel); z-index: 2; }
 a:focus-visible, .btn:focus-visible, .btn-sm:focus-visible, input:focus-visible, select:focus-visible, button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
-header.topbar nav a.active { box-shadow: inset 0 -2px 0 var(--accent); }
+.navlink.active, .navgroup-label.active { box-shadow: inset 0 -2px 0 var(--accent); }
 
 /* skeleton shimmer */
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
