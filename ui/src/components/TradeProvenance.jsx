@@ -12,10 +12,13 @@ function Field({ label, value }) {
 
 export default function TradeProvenance({ tradeId, onClose }) {
   const [trade, setTrade] = useState(undefined)
+  const [dossier, setDossier] = useState(undefined)
 
   useEffect(() => {
     setTrade(undefined)
+    setDossier(undefined)
     api.trade(tradeId).then(setTrade).catch(() => setTrade(null))
+    api.tradeDossier(tradeId).then(setDossier).catch(() => setDossier(null))
   }, [tradeId])
 
   return (
@@ -65,6 +68,50 @@ export default function TradeProvenance({ tradeId, onClose }) {
                   ))}
                 </div>
               ) : <p className="muted">No signal badges.</p>}
+
+              <h3>Conflict Score</h3>
+              {dossier === undefined ? <div className="loading">Loading dossier…</div>
+                : dossier === null ? <p className="muted">Couldn’t load dossier context.</p>
+                : (
+                  <>
+                    <div className={`score-card score-${dossier.conflict_score?.level || 'none'}`}>
+                      <div>
+                        <div className="label">Context score</div>
+                        <div className="big num">{dossier.conflict_score?.score ?? 0}</div>
+                      </div>
+                      <div>
+                        <strong>{dossier.conflict_score?.level || 'none'}</strong>
+                        <div className="muted">{dossier.conflict_score?.reasons?.join(' · ') || 'No elevated context found.'}</div>
+                      </div>
+                    </div>
+
+                    {dossier.policy_context?.length > 0 && (
+                      <div className="recon-note">
+                        <h3>Policy context</h3>
+                        <div className="news-list">
+                          {dossier.policy_context.slice(0, 8).map((e) => (
+                            <a key={e.id} href={e.url} target="_blank" rel="noreferrer">
+                              {e.title}<span className="src"> · {e.event_type}{e.occurred_at ? ` · ${e.occurred_at.slice(0, 10)}` : ''}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {dossier.sec_events?.length > 0 && (
+                      <div className="recon-note">
+                        <h3>SEC context</h3>
+                        <div className="news-list">
+                          {dossier.sec_events.slice(0, 8).map((e) => (
+                            <a key={e.id} href={e.url} target="_blank" rel="noreferrer">
+                              <span className="tag src">{e.form}</span> {e.title}<span className="src"> · {e.filed_at?.slice(0, 10) || ''}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
 
               <h3>Reconciliation</h3>
               {trade.reconciliation?.length ? trade.reconciliation.map((r, i) => (

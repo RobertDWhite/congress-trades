@@ -21,6 +21,7 @@ const Status = lazy(() => import('./pages/Status.jsx'))
 const Committees = lazy(() => import('./pages/Committees.jsx'))
 const Reconciliation = lazy(() => import('./pages/Reconciliation.jsx'))
 const PolicyContext = lazy(() => import('./pages/PolicyContext.jsx'))
+const Research = lazy(() => import('./pages/Research.jsx'))
 
 export default function App() {
   const publicSite = window.CONGRESS_TRADES_CONFIG?.publicSite === true
@@ -35,6 +36,7 @@ export default function App() {
           <NavLink to="/strategies">Strategies</NavLink>
           <NavLink to="/feed">Feed</NavLink>
           <NavLink to="/signals">Signals</NavLink>
+          <NavLink to="/research">Research</NavLink>
           <NavLink to="/lag">Lag</NavLink>
           <NavLink to="/leaderboard">Leaderboard</NavLink>
           <NavLink to="/policy">Policy</NavLink>
@@ -55,6 +57,7 @@ export default function App() {
             <Route path="/ideas" element={<Ideas />} />
             <Route path="/feed" element={<Feed />} />
             <Route path="/signals" element={<Signals />} />
+            <Route path="/research" element={<Research />} />
             <Route path="/lag" element={<DisclosureLag />} />
             <Route path="/strategies" element={<Strategies />} />
             <Route path="/portfolio" element={publicSite ? <Navigate to="/" replace /> : <Portfolio />} />
