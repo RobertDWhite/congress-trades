@@ -61,6 +61,40 @@ export const api = {
   reconciliation: () => get('/reconciliation'),
   reconciliationResolve: (id, status, note) => send('POST', `/reconciliation/${id}/resolve`, { status, note }),
   disclosureLag: (days = 365) => get('/analytics/disclosure-lag', { days }),
+  // discovery
+  discoverOptions: (p) => get('/discover/options', p),
+  newPositions: (p) => get('/discover/new-positions', p),
+  sectorRotation: (days = 365) => get('/discover/sector-rotation', { days }),
+  owners: (p) => get('/discover/owners', p),
+  // free-data overlays
+  contractsFor: (t) => get(`/overlays/contracts/${encodeURIComponent(t)}`),
+  lobbyingFor: (t) => get(`/overlays/lobbying/${encodeURIComponent(t)}`),
+  etfOverlap: (p) => get('/overlays/etf', p),
+  etfForTicker: (t) => get(`/overlays/etf/${encodeURIComponent(t)}`),
+  newsContext: (t) => get(`/overlays/news/${encodeURIComponent(t)}`),
+  macro: () => get('/macro'),
+  prescience: (p) => get('/analysis/prescience', p),
+  membersCompare: (ids) => get('/members/compare', { ids: ids.join(',') }),
+  customBacktest: (body) => send('POST', '/strategies/custom', body),
+  digest: (days = 7) => get('/digest', { days }),
+  meta: () => get('/meta'),
+  // alerts
+  alerts: (token) => get('/alerts', token ? { account_token: token } : undefined),
+  alertCreate: (r) => send('POST', '/alerts', r),
+  alertUpdate: (id, r) => send('PATCH', `/alerts/${id}`, r),
+  alertDelete: (id) => send('DELETE', `/alerts/${id}`),
+  alertPreview: (p) => get('/alerts/preview', p),
+  // accounts (cloud-synced prefs)
+  accountCreate: () => send('POST', '/accounts'),
+  account: (token) => get(`/accounts/${token}`),
+  accountUpdate: (token, prefs, handle) => send('PUT', `/accounts/${token}`, { prefs, handle }),
+}
+
+export function ogTradeUrl(id) { return `/api/og/trade/${id}.png` }
+export function ogMemberUrl(id) { return `/api/og/member/${id}.png` }
+
+export function gradeClass(grade) {
+  return { A: 'pos', B: 'pos', C: 'muted', D: 'neg', F: 'neg' }[grade] || 'muted'
 }
 
 export function exportCsv() {

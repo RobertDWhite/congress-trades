@@ -5,13 +5,27 @@ from sqlalchemy import Numeric, and_, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Member, Trade
+from ..models import Member, Trade, TradeSignal
 from ..serialize import member_dict
 
 router = APIRouter()
 
 _MID = (func.coalesce(Trade.amount_min, 0) + func.coalesce(Trade.amount_max, Trade.amount_min, 0)) / 2.0
 _EXCESS = Trade.return_pct - Trade.bench_return_pct
+
+
+def _compliance_grade(late_rate):
+    if late_rate is None:
+        return "—"
+    if late_rate < 0.05:
+        return "A"
+    if late_rate < 0.15:
+        return "B"
+    if late_rate < 0.30:
+        return "C"
+    if late_rate < 0.50:
+        return "D"
+    return "F"
 
 
 @router.get("/leaderboard")
@@ -52,6 +66,55 @@ def leaderboard(
                     "avg_bench_pct": float(ab or 0),
                 }
                 for m, we, hr, nn, ar, ab in rows
+            ],
+        }
+
+    if metric == "conflict":
+        # share of a member's trades flagged as committee/sector conflicts
+        conflict_ids = select(TradeSignal.trade_id).where(TradeSignal.signal_type == "conflict")
+        total = func.count(Trade.id)
+        conf = func.sum(case((Trade.id.in_(conflict_ids), 1), else_=0))
+        rate = (cast(conf, Numeric) / func.nullif(total, 0)).label("rate")
+        rows = db.execute(
+            select(Member, total, conf, rate)
+            .join(Trade, Trade.member_id == Member.id)
+            .group_by(Member.id)
+            .having(and_(total >= min_trades, conf > 0))
+            .order_by(rate.desc().nullslast())
+            .limit(limit)
+        ).all()
+        return {
+            "metric": "conflict",
+            "note": "Share of a member's disclosed trades in a sector their committee oversees. "
+                    "Context, not an allegation — disclosed trades are legal.",
+            "items": [
+                {**member_dict(m, int(n or 0)), "conflict_trades": int(cf or 0), "conflict_rate": float(r or 0)}
+                for m, n, cf, r in rows
+            ],
+        }
+
+    if metric == "compliance":
+        lag = Trade.disclosure_date - Trade.transaction_date
+        late = func.avg(case((lag >= 45, 1.0), else_=0.0)).label("late")
+        avg_lag = func.avg(lag)
+        n = func.count(Trade.id)
+        rows = db.execute(
+            select(Member, n, late, avg_lag)
+            .join(Trade, Trade.member_id == Member.id)
+            .where(and_(Trade.transaction_date.isnot(None), Trade.disclosure_date.isnot(None)))
+            .group_by(Member.id)
+            .having(n >= min_trades)
+            .order_by(late.desc().nullslast())
+            .limit(limit)
+        ).all()
+        return {
+            "metric": "compliance",
+            "note": "STOCK Act compliance: share of trades disclosed more than 45 days after the transaction. "
+                    "Lower late-rate = better grade.",
+            "items": [
+                {**member_dict(m, int(nn or 0)), "late_rate": float(lr or 0),
+                 "avg_lag_days": float(al) if al is not None else None, "grade": _compliance_grade(float(lr) if lr is not None else None)}
+                for m, nn, lr, al in rows
             ],
         }
 

@@ -1,5 +1,7 @@
 import { api, amountRange, signalLabel } from '../api.js'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import ConflictScore from './ConflictScore.jsx'
 
 function Field({ label, value }) {
   return (
@@ -26,7 +28,10 @@ export default function TradeProvenance({ tradeId, onClose }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Trade Provenance</h2>
-          <button className="btn-sm" onClick={onClose}>Close</button>
+          <div className="modal-head-actions">
+            <Link className="btn-sm" to={`/trade/${tradeId}`} onClick={onClose}>Full dossier →</Link>
+            <button className="btn-sm" onClick={onClose}>Close</button>
+          </div>
         </div>
         {trade === undefined ? <div className="loading">Loading…</div>
           : trade === null ? <p className="muted">Couldn’t load trade details.</p>
@@ -69,21 +74,18 @@ export default function TradeProvenance({ tradeId, onClose }) {
                 </div>
               ) : <p className="muted">No signal badges.</p>}
 
-              <h3>Conflict Score</h3>
+              <h3>Conflict Score v2</h3>
               {dossier === undefined ? <div className="loading">Loading dossier…</div>
                 : dossier === null ? <p className="muted">Couldn’t load dossier context.</p>
                 : (
                   <>
-                    <div className={`score-card score-${dossier.conflict_score?.level || 'none'}`}>
-                      <div>
-                        <div className="label">Context score</div>
-                        <div className="big num">{dossier.conflict_score?.score ?? 0}</div>
+                    <ConflictScore score={dossier.conflict_score} />
+                    {dossier.why_notable?.length > 0 && (
+                      <div className="why-notable why-compact">
+                        <div className="why-title">Why this is notable</div>
+                        <ul>{dossier.why_notable.slice(0, 5).map((w, i) => <li key={i}>{w}</li>)}</ul>
                       </div>
-                      <div>
-                        <strong>{dossier.conflict_score?.level || 'none'}</strong>
-                        <div className="muted">{dossier.conflict_score?.reasons?.join(' · ') || 'No elevated context found.'}</div>
-                      </div>
-                    </div>
+                    )}
 
                     {dossier.policy_context?.length > 0 && (
                       <div className="recon-note">

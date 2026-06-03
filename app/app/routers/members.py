@@ -51,6 +51,49 @@ def list_members(
     }
 
 
+@router.get("/members/compare")
+def compare_members(db: Session = Depends(get_db), ids: str = ""):
+    """Side-by-side stats for 2–4 members (volume, lag, late-rate, follower excess, sector mix)."""
+    member_ids = [int(x) for x in ids.split(",") if x.strip().isdigit()][:4]
+    if not member_ids:
+        return {"items": []}
+    lag = Trade.disclosure_date - Trade.transaction_date
+    out = []
+    for mid in member_ids:
+        m = db.get(Member, mid)
+        if not m:
+            continue
+        row = db.execute(
+            select(
+                func.count(Trade.id),
+                func.sum(case((Trade.transaction_type == "purchase", 1), else_=0)),
+                func.sum(case((Trade.transaction_type == "sale", 1), else_=0)),
+                func.coalesce(func.sum(_MIDPOINT), 0),
+                func.avg(lag),
+                func.avg(case((lag >= 45, 1.0), else_=0.0)),
+                func.avg(Trade.return_pct - Trade.bench_return_pct),
+            ).where(Trade.member_id == mid)
+        ).one()
+        top_sectors = [
+            {"sector": sec or "Unknown", "volume": float(v or 0)}
+            for sec, v in db.execute(
+                select(func.coalesce(TickerMeta.sector, "Unknown"), func.sum(_MIDPOINT))
+                .join(TickerMeta, TickerMeta.ticker == Trade.ticker)
+                .where(Trade.member_id == mid)
+                .group_by(TickerMeta.sector).order_by(func.sum(_MIDPOINT).desc()).limit(5)
+            ).all()
+        ]
+        out.append({
+            **member_dict(m, int(row[0] or 0)),
+            "buys": int(row[1] or 0), "sells": int(row[2] or 0), "est_volume": float(row[3] or 0),
+            "avg_lag_days": float(row[4]) if row[4] is not None else None,
+            "pct_late": float(row[5]) if row[5] is not None else None,
+            "wt_excess_pct": float(row[6]) if row[6] is not None else None,
+            "top_sectors": top_sectors,
+        })
+    return {"items": out}
+
+
 @router.get("/members/{member_id}")
 def get_member(member_id: int, db: Session = Depends(get_db)):
     m = db.get(Member, member_id)

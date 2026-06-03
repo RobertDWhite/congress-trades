@@ -299,6 +299,37 @@ class Holding(Base):
     __table_args__ = (UniqueConstraint("ticker", name="uq_holding_ticker"),)
 
 
+class TickerFundamentals(Base):
+    """Company financials from SEC EDGAR companyfacts (free/public, keyed by CIK).
+
+    Latest annual (10-K) revenue/net income/assets/EPS plus the most recent quarterly
+    (10-Q) figures, used for dossier fundamentals context and the conflict score's
+    'company fundamentals' component. Refreshed periodically; degrades gracefully when absent."""
+
+    __tablename__ = "ticker_fundamentals"
+
+    ticker: Mapped[str] = mapped_column(String(32), primary_key=True)
+    cik: Mapped[str | None] = mapped_column(String(16), index=True)
+    company: Mapped[str | None] = mapped_column(String(256))
+    # latest annual figures
+    fy: Mapped[int | None] = mapped_column(Integer)
+    fy_end: Mapped[dt.date | None] = mapped_column(Date)
+    revenue: Mapped[float | None] = mapped_column(Numeric)
+    net_income: Mapped[float | None] = mapped_column(Numeric)
+    assets: Mapped[float | None] = mapped_column(Numeric)
+    eps_diluted: Mapped[float | None] = mapped_column(Numeric)
+    shares_out: Mapped[float | None] = mapped_column(Numeric)
+    revenue_prior: Mapped[float | None] = mapped_column(Numeric)  # prior FY revenue, for YoY
+    revenue_yoy: Mapped[float | None] = mapped_column(Numeric)    # fractional growth, e.g. 0.12
+    # most recent quarterly figures
+    q_end: Mapped[dt.date | None] = mapped_column(Date)
+    q_revenue: Mapped[float | None] = mapped_column(Numeric)
+    q_net_income: Mapped[float | None] = mapped_column(Numeric)
+    latest_form: Mapped[str | None] = mapped_column(String(8))     # 10-K | 10-Q (headline source)
+    source_url: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class AiSummary(Base):
     __tablename__ = "ai_summaries"
 
@@ -313,3 +344,113 @@ class AiSummary(Base):
     data_hash: Mapped[str | None] = mapped_column(String(64))
     trade_count: Mapped[int | None] = mapped_column(Integer)
     generated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class GovContract(Base):
+    """Federal awards (USASpending.gov, free/public) joined to a traded ticker by recipient name."""
+
+    __tablename__ = "gov_contracts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    award_id: Mapped[str] = mapped_column(String(64), unique=True)  # generated_internal_id / PIID
+    ticker: Mapped[str | None] = mapped_column(String(32), index=True)
+    recipient_name: Mapped[str | None] = mapped_column(String(256))
+    awarding_agency: Mapped[str | None] = mapped_column(String(256))
+    award_type: Mapped[str | None] = mapped_column(String(32))  # contract | grant | loan
+    award_amount: Mapped[float | None] = mapped_column(Numeric)
+    action_date: Mapped[dt.date | None] = mapped_column(Date, index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
+    fetched_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LobbyingRecord(Base):
+    """Federal lobbying disclosures (Senate LDA API, free/public) joined to a ticker by client name."""
+
+    __tablename__ = "lobbying_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filing_uuid: Mapped[str] = mapped_column(String(64), unique=True)
+    ticker: Mapped[str | None] = mapped_column(String(32), index=True)
+    client_name: Mapped[str | None] = mapped_column(String(256))
+    registrant_name: Mapped[str | None] = mapped_column(String(256))
+    amount: Mapped[float | None] = mapped_column(Numeric)
+    year: Mapped[int | None] = mapped_column(Integer, index=True)
+    period: Mapped[str | None] = mapped_column(String(32))  # filing period
+    issues: Mapped[list | None] = mapped_column(JSON)        # general issue area codes/descriptions
+    url: Mapped[str | None] = mapped_column(Text)
+    fetched_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EtfHolding(Base):
+    """Holdings of the congress-tracking ETFs (NANC/KRUZ) for an overlap/benchmark view."""
+
+    __tablename__ = "etf_holdings"
+
+    etf: Mapped[str] = mapped_column(String(16), primary_key=True)     # NANC | KRUZ
+    ticker: Mapped[str] = mapped_column(String(32), primary_key=True)
+    company: Mapped[str | None] = mapped_column(String(256))
+    weight: Mapped[float | None] = mapped_column(Numeric)             # fractional weight 0..1
+    shares: Mapped[float | None] = mapped_column(Numeric)
+    as_of: Mapped[dt.date | None] = mapped_column(Date)
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MacroSeries(Base):
+    """Latest FRED macro series snapshot (rates, CPI, unemployment, treasury yields) for context."""
+
+    __tablename__ = "macro_series"
+
+    series_id: Mapped[str] = mapped_column(String(32), primary_key=True)  # e.g. FEDFUNDS, CPIAUCSL
+    title: Mapped[str | None] = mapped_column(String(256))
+    value: Mapped[float | None] = mapped_column(Numeric)
+    prev_value: Mapped[float | None] = mapped_column(Numeric)
+    units: Mapped[str | None] = mapped_column(String(64))
+    as_of: Mapped[dt.date | None] = mapped_column(Date)
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AlertRule(Base):
+    """User-configurable alert rule. Evaluated against new trades; delivered to its channels."""
+
+    __tablename__ = "alert_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    # member | ticker | large | cluster | conflict | late | options | event_proximity
+    rule_type: Mapped[str] = mapped_column(String(32), index=True)
+    params: Mapped[dict | None] = mapped_column(JSON)     # {member_id, ticker, sector, min_amount, min_conviction, ...}
+    channels: Mapped[list | None] = mapped_column(JSON)   # [{"type":"ntfy|email|webhook","target":"..."}]
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    account_token: Mapped[str | None] = mapped_column(String(64), index=True)  # null = global/legacy
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_fired_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AlertDelivery(Base):
+    """De-dup + audit log of a rule firing for a given trade."""
+
+    __tablename__ = "alert_deliveries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    rule_id: Mapped[int] = mapped_column(ForeignKey("alert_rules.id", ondelete="CASCADE"), index=True)
+    trade_id: Mapped[int] = mapped_column(ForeignKey("trades.id", ondelete="CASCADE"), index=True)
+    channel: Mapped[str | None] = mapped_column(String(32))
+    status: Mapped[str | None] = mapped_column(String(16))  # sent | failed | skipped
+    fired_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    __table_args__ = (UniqueConstraint("rule_id", "trade_id", name="uq_alert_rule_trade"),)
+
+
+class UserAccount(Base):
+    """Lightweight, token-based account: cloud-synced prefs (watchlist, alert channels, filters).
+    No password — the opaque token IS the credential, stored client-side. Single-table, optional."""
+
+    __tablename__ = "user_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    handle: Mapped[str | None] = mapped_column(String(64))
+    prefs: Mapped[dict | None] = mapped_column(JSON)  # {watchlist:[...], saved_filters:[...], digest_email:...}
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))

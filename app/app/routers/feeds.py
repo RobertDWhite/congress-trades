@@ -8,13 +8,95 @@ from xml.sax.saxutils import escape
 import requests
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import IngestState, Member, TickerMeta, Trade, TradeSignal
+from ..models import AiSummary, IngestState, Member, TickerMeta, Trade, TradeSignal
 
 router = APIRouter()
+
+_MID = (func.coalesce(Trade.amount_min, 0) + func.coalesce(Trade.amount_max, Trade.amount_min, 0)) / 2.0
+
+
+def build_digest(db, days=7):
+    """Weekly digest payload: AI overview + hottest tickers + new positions + biggest conflicts.
+    Shared by the /digest endpoint and the email-digest cron."""
+    since = dt.date.today() - dt.timedelta(days=days)
+    ai = db.scalar(
+        select(AiSummary).where(and_(AiSummary.scope == "global", AiSummary.window_days == days))
+        .order_by(AiSummary.generated_at.desc()).limit(1)
+    )
+    hot = [
+        {"ticker": tk, "buys": int(b or 0), "sells": int(s or 0), "volume": float(v or 0)}
+        for tk, b, s, v in db.execute(
+            select(Trade.ticker,
+                   func.sum(case((Trade.transaction_type == "purchase", 1), else_=0)),
+                   func.sum(case((Trade.transaction_type == "sale", 1), else_=0)),
+                   func.coalesce(func.sum(_MID), 0))
+            .where(and_(Trade.ticker.isnot(None), Trade.disclosure_date >= since))
+            .group_by(Trade.ticker).order_by(func.count().desc()).limit(8)
+        ).all()
+    ]
+    conflicts = [
+        {"member": nm, "ticker": tk, "sector": sec}
+        for nm, tk, sec in db.execute(
+            select(Member.full_name, Trade.ticker, TickerMeta.sector)
+            .join(TradeSignal, and_(TradeSignal.trade_id == Trade.id, TradeSignal.signal_type == "conflict"))
+            .join(Member, Member.id == Trade.member_id, isouter=True)
+            .join(TickerMeta, TickerMeta.ticker == Trade.ticker, isouter=True)
+            .where(Trade.disclosure_date >= since)
+            .order_by(Trade.disclosure_date.desc().nullslast()).limit(8)
+        ).all()
+    ]
+    new_positions = db.scalar(
+        select(func.count(func.distinct(func.concat(Trade.member_id, ':', Trade.ticker))))
+        .where(and_(Trade.transaction_type == "purchase", Trade.disclosure_date >= since, Trade.ticker.isnot(None)))
+    ) or 0
+    return {
+        "window_days": days,
+        "summary_md": ai.summary_md if ai else None,
+        "observations": (ai.observations or []) if ai else [],
+        "hot_tickers": hot,
+        "conflicts": conflicts,
+        "new_position_pairs": int(new_positions),
+        "disclaimer": DISCLAIMER,
+    }
+
+
+@router.get("/digest")
+def digest(db: Session = Depends(get_db), days: int = Query(7, le=30)):
+    return build_digest(db, days)
+
+
+@router.get("/meta")
+def meta():
+    """Public API surface + data provenance, for the developer/methodology page."""
+    return {
+        "name": "Congress Trades API",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "license": "Public data; informational use only, not financial advice.",
+        "data_sources": [
+            {"name": "House Clerk", "what": "House periodic transaction reports"},
+            {"name": "Senate eFD", "what": "Senate electronic financial disclosures"},
+            {"name": "Congress.gov", "what": "Bills, votes, hearings, committee activity"},
+            {"name": "SEC EDGAR", "what": "Form 4 / 8-K filings + company fundamentals"},
+            {"name": "USASpending.gov", "what": "Federal contract & grant awards"},
+            {"name": "Senate LDA", "what": "Federal lobbying disclosures"},
+            {"name": "FRED", "what": "Macro context (rates, CPI, yields)"},
+            {"name": "Stooq / Yahoo", "what": "Prices & quotes for return calc"},
+        ],
+        "endpoints": [
+            "/api/trades", "/api/members", "/api/tickers", "/api/leaderboard", "/api/ideas",
+            "/api/analysis/trade-dossier/{id}", "/api/analysis/unusual-activity", "/api/analysis/prescience",
+            "/api/discover/options", "/api/discover/new-positions", "/api/discover/sector-rotation",
+            "/api/overlays/contracts/{ticker}", "/api/overlays/lobbying/{ticker}", "/api/overlays/etf",
+            "/api/strategies", "/api/strategies/custom", "/api/macro", "/api/digest",
+            "/api/feed.rss", "/api/export/trades.csv",
+        ],
+        "disclaimer": DISCLAIMER,
+    }
 
 DISCLAIMER = "Publicly disclosed congressional trades (STOCK Act), lagged up to 45 days. Informational, not advice."
 _EXPORT_COLS = ["transaction_date", "disclosure_date", "member", "party", "state", "chamber",
@@ -43,14 +125,20 @@ def export_csv(db: Session = Depends(get_db), limit: int = Query(5000, le=50000)
 
 
 @router.get("/feed.rss")
-def rss(db: Session = Depends(get_db), limit: int = Query(50, le=200)):
-    rows = db.execute(
+def rss(db: Session = Depends(get_db), limit: int = Query(50, le=200),
+        member_id: int | None = None, ticker: str | None = None):
+    stmt = (
         select(Trade, Member, func.array_agg(TradeSignal.signal_type))
         .join(Member, Member.id == Trade.member_id, isouter=True)
         .join(TradeSignal, TradeSignal.trade_id == Trade.id, isouter=True)
         .group_by(Trade.id, Member.id)
-        .order_by(Trade.disclosure_date.desc().nullslast(), Trade.id.desc())
-        .limit(limit)
+    )
+    if member_id:
+        stmt = stmt.where(Trade.member_id == member_id)
+    if ticker:
+        stmt = stmt.where(Trade.ticker == ticker.upper())
+    rows = db.execute(
+        stmt.order_by(Trade.disclosure_date.desc().nullslast(), Trade.id.desc()).limit(limit)
     ).all()
     items = []
     for t, m, sigs in rows:
@@ -81,6 +169,13 @@ def status(db: Session = Depends(get_db)):
         "gov_events": 2 * 60 * 60,
         "legislative_events": 48 * 60 * 60,
         "reconciliation": 24 * 60 * 60,
+        "fundamentals": 14 * 24 * 60 * 60,
+        "contracts": 7 * 24 * 60 * 60,
+        "lobbying": 7 * 24 * 60 * 60,
+        "etf_holdings": 2 * 24 * 60 * 60,
+        "fred": 2 * 24 * 60 * 60,
+        "alerts_dispatch": 2 * 60 * 60,
+        "digest_email": 8 * 24 * 60 * 60,
     }
     sources = []
     for st in db.scalars(select(IngestState)).all():

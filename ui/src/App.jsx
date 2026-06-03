@@ -22,6 +22,12 @@ const Committees = lazy(() => import('./pages/Committees.jsx'))
 const Reconciliation = lazy(() => import('./pages/Reconciliation.jsx'))
 const PolicyContext = lazy(() => import('./pages/PolicyContext.jsx'))
 const Research = lazy(() => import('./pages/Research.jsx'))
+const TradeDossier = lazy(() => import('./pages/TradeDossier.jsx'))
+const Options = lazy(() => import('./pages/Options.jsx'))
+const Discover = lazy(() => import('./pages/Discover.jsx'))
+const Compare = lazy(() => import('./pages/Compare.jsx'))
+const Alerts = lazy(() => import('./pages/Alerts.jsx'))
+const Methodology = lazy(() => import('./pages/Methodology.jsx'))
 
 export default function App() {
   const publicSite = window.CONGRESS_TRADES_CONFIG?.publicSite === true
@@ -33,19 +39,24 @@ export default function App() {
         <nav>
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/ideas">Ideas</NavLink>
+          <NavLink to="/discover">Discover</NavLink>
+          <NavLink to="/options">Options</NavLink>
           <NavLink to="/strategies">Strategies</NavLink>
           <NavLink to="/feed">Feed</NavLink>
           <NavLink to="/signals">Signals</NavLink>
           <NavLink to="/research">Research</NavLink>
+          <NavLink to="/alerts">Alerts</NavLink>
           <NavLink to="/lag">Lag</NavLink>
           <NavLink to="/leaderboard">Leaderboard</NavLink>
           <NavLink to="/policy">Policy</NavLink>
           <NavLink to="/committees">Committees</NavLink>
           <NavLink to="/members">Members</NavLink>
+          <NavLink to="/compare">Compare</NavLink>
           <NavLink to="/tickers">Tickers</NavLink>
           {!publicSite && <NavLink to="/portfolio">Portfolio</NavLink>}
           <NavLink to="/watchlist">Watchlist</NavLink>
           <NavLink to="/sources">Sources</NavLink>
+          <NavLink to="/about">About</NavLink>
           <NavLink to="/status">Status</NavLink>
         </nav>
         <GlobalSearch />
@@ -58,6 +69,12 @@ export default function App() {
             <Route path="/feed" element={<Feed />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/research" element={<Research />} />
+            <Route path="/trade/:id" element={<TradeDossier />} />
+            <Route path="/options" element={<Options />} />
+            <Route path="/discover" element={<Discover />} />
+            <Route path="/compare" element={<Compare />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/about" element={<Methodology />} />
             <Route path="/lag" element={<DisclosureLag />} />
             <Route path="/strategies" element={<Strategies />} />
             <Route path="/portfolio" element={publicSite ? <Navigate to="/" replace /> : <Portfolio />} />

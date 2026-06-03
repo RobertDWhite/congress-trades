@@ -258,3 +258,74 @@ header.topbar nav a.active { box-shadow: inset 0 -2px 0 var(--accent); }
 .prov-field { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; overflow-wrap: anywhere; }
 .raw-excerpt, .recon-note pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; color: var(--muted); max-height: 220px; overflow: auto; }
 .recon-note { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+
+/* ============ trade dossier + conflict score v2 ============ */
+.modal-head-actions { display: flex; gap: 8px; align-items: center; }
+
+.dossier-head { margin: 4px 0 16px; }
+.dossier-line { font-size: 15px; }
+.dossier-dates { font-size: 12px; margin-top: 4px; }
+.dossier-disclaimer { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 12px; }
+
+/* provenance / credibility badges */
+.prov-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.prov-badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.prov-primary { border-color: rgba(63,185,80,.5); color: var(--buy); background: rgba(63,185,80,.10); }
+.prov-comparison { border-color: rgba(210,153,34,.5); color: var(--exch); background: rgba(210,153,34,.10); }
+.prov-context { border-color: rgba(88,166,255,.45); color: var(--accent); background: rgba(88,166,255,.10); }
+.prov-link { color: var(--accent); }
+.prov-link:hover { text-decoration: none; border-color: var(--accent); }
+h3 .prov-badge { margin-left: 6px; vertical-align: middle; }
+
+/* "why this is notable" callout */
+.why-notable { background: var(--accent-dim); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); padding: 12px 16px; margin: 16px 0; }
+.why-notable .why-title { font-weight: 700; margin-bottom: 6px; }
+.why-notable ul { margin: 0; padding-left: 18px; }
+.why-notable li { margin: 4px 0; }
+.why-compact { margin: 12px 0; }
+
+/* conflict score gauge + transparent component breakdown */
+.cs-head { display: flex; align-items: center; gap: 16px; }
+.cs-gauge { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 78px; height: 78px; border-radius: 50%; border: 4px solid var(--border); }
+.cs-num { font-size: 26px; font-weight: 800; line-height: 1; color: var(--muted); }
+.cs-of { font-size: 10px; color: var(--muted); }
+.cs-title { font-weight: 700; }
+.cs-summary { font-size: 12px; margin-top: 4px; }
+.cs-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .04em; }
+.cs-pill-high { background: rgba(248,81,73,.18); color: var(--sell); }
+.cs-pill-medium { background: rgba(210,153,34,.18); color: var(--exch); }
+.cs-pill-low { background: rgba(88,166,255,.18); color: var(--accent); }
+.cs-pill-none { background: rgba(139,148,158,.15); color: var(--muted); }
+.cs-high .cs-gauge { border-color: var(--sell); } .cs-high .cs-num { color: var(--sell); }
+.cs-medium .cs-gauge { border-color: var(--exch); } .cs-medium .cs-num { color: var(--exch); }
+.cs-low .cs-gauge { border-color: var(--accent); } .cs-low .cs-num { color: var(--accent); }
+
+.cs-components { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.cs-row.off { opacity: .5; }
+.cs-row-top { display: flex; justify-content: space-between; align-items: baseline; }
+.cs-label { font-size: 13px; font-weight: 600; }
+.cs-pts { font-size: 12px; }
+.cs-bar { height: 6px; border-radius: 3px; background: #30363d; overflow: hidden; margin: 4px 0 3px; }
+.cs-bar > span { display: block; height: 100%; background: var(--muted); transition: width .3s; }
+.cs-high .cs-row.on .cs-bar > span { background: var(--sell); }
+.cs-medium .cs-row.on .cs-bar > span { background: var(--exch); }
+.cs-low .cs-row.on .cs-bar > span { background: var(--accent); }
+.cs-detail { font-size: 11px; }
+.cs-method { margin-top: 12px; }
+.cs-flag { color: var(--sell); font-weight: 600; font-size: 13px; margin: 0 0 8px; }
+
+/* compliance grade badge */
+.grade { display: inline-block; min-width: 24px; padding: 1px 8px; border-radius: 6px; font-weight: 800;
+  background: rgba(139,148,158,.15); }
+.grade.pos { color: var(--buy); background: rgba(63,185,80,.16); }
+.grade.neg { color: var(--sell); background: rgba(248,81,73,.16); }
+.grade.muted { color: var(--exch); background: rgba(210,153,34,.16); }
+
+/* sector-rotation heatmap */
+table.heatmap td, table.heatmap th { padding: 6px 8px; font-size: 12px; }
+table.heatmap td:first-child { font-weight: 600; }
+table.heatmap td { transition: background .15s; }
