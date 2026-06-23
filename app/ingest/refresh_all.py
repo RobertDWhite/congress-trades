@@ -20,6 +20,7 @@ import traceback
 STEPS = [
     "house",           # House PTR disclosures (raw trades)
     "senate",          # Senate PTR disclosures (raw trades)
+    "president",        # Presidential OGE 278-T disclosures (raw trades)
     "lambda_feed",     # safety-net / cross-check feed
     "ticker_aliases",  # normalize null-ticker trades from fresh data
     "enrich",          # member party / state / district

@@ -5,6 +5,7 @@ import { api } from '../api.js'
 const SOURCE_LABEL = {
   house_primary: 'House — self-parsed (authoritative)',
   senate_primary: 'Senate — self-parsed (authoritative)',
+  oge_potus: 'President — OGE Form 278-T (authoritative)',
   lambda: 'Lambda Finance — third-party live feed',
 }
 

@@ -34,7 +34,7 @@ export default function Feed() {
         <input placeholder="Search asset / member / ticker" value={filters.q} onChange={set('q')} />
         <input placeholder="Ticker" value={filters.ticker} onChange={set('ticker')} style={{ minWidth: 80 }} />
         <select value={filters.chamber} onChange={set('chamber')}>
-          <option value="">All chambers</option><option value="house">House</option><option value="senate">Senate</option>
+          <option value="">All chambers</option><option value="house">House</option><option value="senate">Senate</option><option value="executive">Executive</option>
         </select>
         <select value={filters.party} onChange={set('party')}>
           <option value="">All parties</option><option value="Republican">R</option><option value="Democrat">D</option><option value="Independent">I</option>
