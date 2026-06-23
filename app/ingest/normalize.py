@@ -75,7 +75,7 @@ def clean_ticker(ticker):
     return t
 
 
-def dedup_key(chamber, name_norm, tx_date, ticker, amount_min, amount_max, tx_type):
+def dedup_key(chamber, name_norm, tx_date, ticker, amount_min, amount_max, tx_type, asset_name=None):
     # Key on the PARSED amount bucket, not the raw string — the same trade arrives from
     # House/Senate/Lambda with differently-formatted amount text (en-dash vs hyphen, $,
     # spacing), and keying on raw text would let duplicates survive and defeat source
@@ -89,4 +89,9 @@ def dedup_key(chamber, name_norm, tx_date, ticker, amount_min, amount_max, tx_ty
         str(amount_max if amount_max is not None else ""),
         tx_type or "",
     ]
+    # Ticker is what normally distinguishes same-day same-amount trades. When it's absent
+    # (e.g. the President's OGE bond purchases — many distinct bonds, same date/bracket),
+    # fall back to the asset name so they don't collapse onto one dedup_key.
+    if not ticker and asset_name:
+        parts.append(asset_name.strip().lower()[:120])
     return hashlib.sha1("|".join(parts).encode()).hexdigest()

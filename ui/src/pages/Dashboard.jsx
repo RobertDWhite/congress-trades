@@ -49,7 +49,8 @@ export default function Dashboard() {
           <Kpi label="Volume · 30d" value={compactMoney(stats.kpi?.volume_30d)} d={delta(stats.kpi?.volume_30d, stats.kpi?.volume_prior_30d)} />
           <Kpi label="House" value={(stats.by_chamber?.house || 0).toLocaleString()} />
           <Kpi label="Senate" value={(stats.by_chamber?.senate || 0).toLocaleString()} />
-          <Kpi label="Self-parsed" value={((stats.by_source?.house_primary || 0) + (stats.by_source?.senate_primary || 0)).toLocaleString()} />
+          {(stats.by_chamber?.executive || 0) > 0 && <Kpi label="Executive" value={(stats.by_chamber?.executive || 0).toLocaleString()} />}
+          <Kpi label="Self-parsed" value={((stats.by_source?.house_primary || 0) + (stats.by_source?.senate_primary || 0) + (stats.by_source?.oge_potus || 0)).toLocaleString()} />
           {status && <Kpi label="Stale sources" value={status.stale_sources || 0} />}
         </div>
       )}

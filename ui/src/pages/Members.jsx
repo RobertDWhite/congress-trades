@@ -42,6 +42,7 @@ export default function Members() {
           <option value="">All chambers</option>
           <option value="house">House</option>
           <option value="senate">Senate</option>
+          <option value="executive">Executive</option>
         </select>
         <select value={filters.party} onChange={set('party')}>
           <option value="">All parties</option>

@@ -8,7 +8,7 @@ from app.models import Filing, IngestState, Member, Trade
 
 from . import normalize as nz
 
-SOURCE_PRIORITY = {"lambda": 1, "house_primary": 2, "senate_primary": 2}
+SOURCE_PRIORITY = {"lambda": 1, "house_primary": 2, "senate_primary": 2, "oge_potus": 2}
 
 
 def get_ingest_state(session, source):
@@ -123,7 +123,8 @@ def upsert_trade(
     if disclosure_date and disclosure_date > today:
         disclosure_date = None
     key = nz.dedup_key(
-        chamber, name_norm, transaction_date, ticker, amount_min, amount_max, transaction_type
+        chamber, name_norm, transaction_date, ticker, amount_min, amount_max, transaction_type,
+        asset_name=asset_name,
     )
     prio = SOURCE_PRIORITY.get(source, 1)
 
