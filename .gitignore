@@ -11,3 +11,5 @@ venv/
 !.env.example
 .DS_Store
 *.log
+.claude/worktrees/congress-president-trades/
+.claude/worktrees/congress-refresh-8am/
