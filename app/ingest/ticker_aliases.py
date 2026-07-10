@@ -45,7 +45,7 @@ def run():
         aliases = db.execute(select(TickerAlias.alias, TickerAlias.ticker, TickerAlias.confidence).order_by(TickerAlias.confidence.desc().nullslast())).all()
         rows = db.scalars(
             select(Trade)
-            .where(Trade.ticker.is_(None), Trade.asset_name.isnot(None), Trade.source.in_(["house_primary", "senate_primary"]))
+            .where(Trade.ticker.is_(None), Trade.asset_name.isnot(None), Trade.source.in_(["house_primary", "senate_primary", "oge_potus"]))
             .limit(1000)
         ).all()
         for t in rows:
