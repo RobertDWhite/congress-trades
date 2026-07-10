@@ -24,12 +24,13 @@ from . import normalize as nz
 # pure parser) imports without a configured DATABASE_URL — keeps parse_278t unit-testable.
 
 # Seed list of known public OGE Form 278-T filings for the current President, overridden by
-# cfg['president']['filings'] when present. These four 2025 reports parse cleanly. Some later
-# filings are scanned at much lower quality (garbled OCR — the type/date gate makes the parser
-# emit nothing for those rather than junk); add them via config once they read reliably. New
-# filings are searchable at extapps2.oge.gov (no per-president index, so they're listed here).
+# cfg['president']['filings'] when present. These extapps2.oge.gov copies carry an Acrobat OCR
+# text layer and parse cleanly without local OCR. Newer filings arrive via discovery from the
+# White House disclosures page (see DISCOVER_URL); badly-scanned ones yield nothing rather
+# than junk thanks to the type/merge gates, and are marked 'paper' once OCR has been tried.
 SEED_FILINGS = [
     "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/5315A095A2EE1B9185258CEB006E7E36/$FILE/Donald-J-Trump-08.12.2025-278T(3).pdf",
+    "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/322B8A28DB21CC9285258CFD002C0D0B/$FILE/Donald%20J.%20Trump%209.3.25%20278-T.pdf",
     "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/AA799A2729B4D1BE85258D430031A320/$FILE/Donald%20J.%20Trump%2010.17.2025%20278-T.pdf",
     "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/18353894FE440B3685258D430031A337/$FILE/Donald%20J.%20Trump%2010.20.2025%20278-T%20(2).pdf",
     "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/903A217DC18563EC85258D4A0031B044/$FILE/Donald%20J.%20Trump%2011.14.2025%20278-T.pdf",
@@ -54,10 +55,21 @@ _AMT = re.compile(r"[\$sS]?\s*([\d.,oOlI]{2,})\s*[-–—•·]\s*[\$sS]?\s*([\d
 # ("8/11/2025" -> "8/112025"), so also accept a day+year run and split off the year.
 _DATE = re.compile(r"\b(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*((?:19|20)\d{2})\b"
                    r"|\b(\d{1,2})\s*/\s*(\d{1,2})((?:19|20)\d{2})\b")
-# OGE filename carries the disclosure (filing) date as MM.DD.YYYY.
-_FILE_DATE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4})")
+# Filing filenames carry the disclosure date in dotted form ("8.12.25", "1.14.2026"),
+# sometimes with a stray digit group ("...Report-0.6.25.26-1.pdf" is 06/25/2026 part 1).
+_DOTTED = re.compile(r"(?:\d{1,4}\.)+\d{1,4}")
 # Lotus Notes document UNID in the OGE URL, used as a stable per-filing doc_id.
 _UNID = re.compile(r"/([0-9A-Fa-f]{16,32})/\$FILE", re.IGNORECASE)
+
+# The White House posts every presidential PTR on its disclosures page — the only public,
+# enumerable index of these filings (OGE's Domino views hide the President and its full-text
+# search is disabled). Polling it gives auto-discovery: new filings are ingested on the next
+# run with no config change. Note these copies are raw scans with no text layer, so parsing
+# them relies on the OCR fallback (ocr.enabled) — extapps2.oge.gov copies of the same
+# filings carry an Acrobat OCR text layer and parse without it.
+DISCOVER_URL = "https://www.whitehouse.gov/disclosures/"
+_DISCOVER_PDF = re.compile(
+    r'href="([^"]*(?:Periodic-Transaction-Report|278-?T)[^"]*\.pdf)"', re.IGNORECASE)
 
 _SKIP = ("OGE Form", "OGE ƒ", "OGE �arm", "Transactions", "Tranuctlon", "Tranuctlona",
          "Description", "Filo(s", "Fllo(s", "FllofsNamo", "Note", "Summary of Contents",
@@ -70,6 +82,16 @@ _SKIP = ("OGE Form", "OGE ƒ", "OGE �arm", "Transactions", "Tranuctlon", "Tran
 # fuzzily; only applied to non-amount (continuation) lines, so real trades are never lost.
 _HEADER_NOISE = re.compile(
     r"(?i)(over\s*\w*\s*(30|days?|ago)|notif|descr|\bamount\b|\bpage\b|\btype\b.*\bdate\b)")
+# Some filings use a layout that glues two transactions onto one text line. The giveaway is
+# a type word followed by a date remnant (digit/digit) — or a dollar-amount remnant — inside
+# the built description. Bare instrument words ("INSTALL SALE PG", "MTG PURCH SER B") don't
+# trip it. Such rows mix two assets, so drop them rather than ingest a corrupted row.
+_MERGED = re.compile(
+    r"(?i)\b(?:(?:purch|ourch|nurch|pureh|oureh)\w*|sale|salo|sold)\b.{0,30}\d/\d"
+    r"|\$\d[\d,]{2,}")
+# A percent coupon plus a maturity marker ("% ... Due", OCR variants included, possibly glued
+# to the maturity date as "DUE02/15/38") means a debt instrument, not equity.
+_BOND = re.compile(r"(?i)%.*\bdu[eoa]")
 
 
 def _classify(w):
@@ -168,13 +190,15 @@ def parse_278t(text, filer_name=None):
         desc = _LEAK.sub("", desc, count=1)
         desc = re.sub(r"\s{2,}", " ", desc).strip(" -•·")
         # A real 278-T row always has a Purchase/Sale/Exchange type and a description; when
-        # neither survives OCR the row is too garbled to trust, so skip it. This keeps badly
-        # scanned filings from emitting junk rows instead of nothing.
-        if not ttype or not desc:
+        # neither survives OCR the row is too garbled to trust, so skip it. Likewise a type
+        # word inside the description marks a multi-transaction merge artifact. This keeps
+        # badly scanned filings emitting nothing instead of junk rows.
+        if not ttype or not desc or _MERGED.search(desc):
             pending = []
             continue
         rows.append({
             "asset_name": desc,
+            "asset_type": "bond" if _BOND.search(desc) else None,
             "transaction_type": ttype,
             "transaction_date": tx_date,
             "amount_min": lo,
@@ -193,18 +217,56 @@ def _doc_id(url):
     return hashlib.sha1(url.encode()).hexdigest()[:32]
 
 
+def _name_date(url):
+    """Filing (disclosure) date from the PDF filename's dotted date. Takes the last three
+    dotted digit groups, so stray leading digits and part suffixes don't break it."""
+    base = urllib.parse.unquote(url).rsplit("/", 1)[-1]
+    runs = _DOTTED.findall(base)
+    if not runs:
+        return None
+    parts = runs[-1].split(".")[-3:]
+    if len(parts) < 3:
+        return None
+    mo, dy, yr = (int(x) for x in parts)
+    if yr < 100:
+        yr += 2000
+    try:
+        return dt.date(yr, mo, dy)
+    except ValueError:
+        return None
+
+
 def _disclosure_date(entry, url):
     d = nz.parse_date(entry.get("disclosure_date")) if isinstance(entry, dict) else None
-    if d:
-        return d
-    m = _FILE_DATE.search(urllib.parse.unquote(url))
-    if m:
-        mo, dy, yr = (int(x) for x in m.groups())
-        try:
-            return dt.date(yr, mo, dy)
-        except ValueError:
-            return None
-    return None
+    return d or _name_date(url)
+
+
+def discover_filings(sess, pc):
+    """Best-effort enumeration of the filer's PTR PDF links from the disclosures page.
+    Returns [] on any failure so ingest falls back to the configured/seed list.
+
+    The page lists PTRs for ALL White House staff (Wiles, Zinberg, Kenny, ...), and run()
+    attributes every ingested filing to the configured filer — so filtering by the filer's
+    name tokens here is a correctness requirement, not cosmetics."""
+    url = pc.get("discover_url", DISCOVER_URL)
+    toks = [t for t in re.split(r"[^a-z]+", pc.get("filer_name", "Donald J. Trump").lower())
+            if len(t) > 2]
+    try:
+        r = sess.get(url, timeout=60)
+        r.raise_for_status()
+    except Exception as e:  # noqa: BLE001 — discovery is best-effort
+        print(f"president: discovery failed ({url}): {e}")
+        return []
+    seen = set()
+    urls = []
+    for m in _DISCOVER_PDF.finditer(r.text):
+        href = urllib.parse.urljoin(url, m.group(1))
+        base = urllib.parse.unquote(href).rsplit("/", 1)[-1].lower()
+        if href not in seen and all(t in base for t in toks):
+            seen.add(href)
+            urls.append(href)
+    urls.sort(key=lambda u: _name_date(u) or dt.date.max)  # oldest first, stable ingest order
+    return urls
 
 
 def _fetch(sess, url):
@@ -235,16 +297,22 @@ def run():
     cfg = load_config()
     init_db()
     pc = cfg.get("president") or {}
-    filings = pc.get("filings") or SEED_FILINGS
-    if not filings:
-        print("president: no filings configured")
-        return
-
     filer_name = pc.get("filer_name", "Donald J. Trump")
     party = pc.get("party", "R")
     ocr_enabled = bool(cfg.get("ocr", {}).get("enabled"))
     ocr_dpi = int(cfg.get("ocr", {}).get("dpi", 200))
     sess = common.make_session(cfg)
+
+    filings = list(pc.get("filings") or SEED_FILINGS)
+    if pc.get("discover", True):
+        known = {_doc_id(e["url"] if isinstance(e, dict) else e) for e in filings}
+        extra = [u for u in discover_filings(sess, pc) if _doc_id(u) not in known]
+        if extra:
+            print(f"president: discovered {len(extra)} filing(s)")
+        filings += extra
+    if not filings:
+        print("president: no filings configured or discovered")
+        return
 
     db = SessionLocal()
     n = 0
@@ -254,7 +322,7 @@ def run():
             url = entry["url"] if isinstance(entry, dict) else entry
             doc_id = _doc_id(url)
             existing = common.get_filing(db, "oge", doc_id)
-            if existing and existing.parse_status in ("parsed", "ocr"):
+            if existing and existing.parse_status in ("parsed", "ocr", "paper"):
                 continue
 
             content = _fetch(sess, url)
@@ -284,8 +352,23 @@ def run():
             db.flush()
 
             rows = parse_278t(text, filer_name=filer_name)
+            if not rows and status == "parsed" and ocr_enabled:
+                # An embedded text layer exists but is too garbled to parse (low-quality
+                # scans — including everything on the White House page, which has no text
+                # layer worth the name); a real OCR pass often reads better.
+                try:
+                    ocr = ocr_text(content, ocr_dpi)
+                    rows = parse_278t(ocr, filer_name=filer_name)
+                    if rows:
+                        text, status = ocr, "ocr"
+                        f.parse_status = status
+                        f.raw_text = text[:200000]
+                except Exception as e:  # noqa: BLE001 — OCR is best-effort
+                    print(f"president: OCR retry failed {doc_id}: {e}")
             if not rows:
-                f.parse_status = "error"
+                # "paper" (terminal) once OCR has also been tried, else "error" (retried
+                # next run — e.g. environments without OCR).
+                f.parse_status = "paper" if (ocr_enabled or status == "ocr") else "error"
                 print(f"president: no transactions parsed from {url}")
                 continue
             for txn in rows:
@@ -300,7 +383,7 @@ def run():
                     owner=None,
                     ticker=None,
                     asset_name=txn["asset_name"],
-                    asset_type=None,
+                    asset_type=txn["asset_type"],
                     transaction_type=txn["transaction_type"],
                     amount_min=txn["amount_min"],
                     amount_max=txn["amount_max"],

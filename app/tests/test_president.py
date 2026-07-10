@@ -55,6 +55,85 @@ def test_description_preserved_and_wrapped_lines_joined():
     assert "BROWARD" in rows[5]["asset_name"] and "XTRO" in rows[5]["asset_name"]
 
 
+def test_asset_type_bond_vs_equity():
+    rows = _rows()
+    assert rows[0]["asset_type"] == "bond"          # "% Due Dec 1, 2034"
+    assert rows[3]["asset_type"] == "bond"          # "3.75% DUE 08/05/27" (glued DUE)
+    assert rows[4]["asset_type"] is None            # APPLE INC COM (equity)
+
+
+def test_merged_rows_dropped_but_instrument_words_kept():
+    # Two transactions glued onto one line (type + date remnant inside the description)
+    # must be dropped; munis whose NAMES contain SALE/PURCH must not be.
+    merged = ("                KENDALL KANE & WILL 5% DUE 02/01/35 ourehase 10/9/2025 No"
+              " S1 ooo 001- Ss ooo ooo NORTH TEX TWY AUTH   purchase   10/7/2025   No   $500,001 - $1,000,000")
+    legit = ("                GEORGIA MUN ASSN INC INSTALL SALE PG CTF PARTN RFDG REV B/E 5.00 %"
+             "   ourchase   10/1/2025   No   $100,001 - $250,000\n"
+             "                MAINE ST HSG AUTH MTG PURCH SERB REV 8/E 2.10 % Due Nov 15, 2026"
+             "   ourchase   10/1/2025   No   $100,001 - $250,000")
+    assert pres.parse_278t(merged) == []
+    kept = pres.parse_278t(legit)
+    assert len(kept) == 2 and all(r["transaction_type"] == "purchase" for r in kept)
+
+
+def test_name_date_handles_wh_and_oge_filenames():
+    cases = {
+        "https://x/Donald-J-Trump-08.12.2025-278T(3).pdf": "2025-08-12",
+        "https://x/Donald%20J.%20Trump%209.3.25%20278-T.pdf": "2025-09-03",
+        "https://x/President-Donald-J.-Trump-Periodic-Transaction-Report-1.14.2026-.pdf": "2026-01-14",
+        # stray leading digit group: "0.6.25.26" is 06/25/2026
+        "https://x/President-Donald-J.-Trump-Periodic-Transaction-Report-0.6.25.26-1.pdf": "2026-06-25",
+        "https://x/President-Donald-J.-Trump-Periodic-Transaction-Report-05.08.26-2.pdf": "2026-05-08",
+    }
+    for url, want in cases.items():
+        d = pres._name_date(url)
+        assert d is not None and d.isoformat() == want, (url, d)
+
+
+def test_discovery_regex_extracts_ptr_links():
+    html = (
+        '<a href="https://www.whitehouse.gov/wp-content/uploads/2026/05/'
+        'President-Donald-J.-Trump-Periodic-Transaction-Report-05.08.26-1.pdf">r1</a>'
+        '<a href="/wp-content/uploads/2025/08/Donald-J-Trump-278T.pdf">r2</a>'
+        '<a href="/wp-content/uploads/2026/01/Some-Other-Official-Ethics-Waiver.pdf">no</a>'
+    )
+    urls = [m.group(1) for m in pres._DISCOVER_PDF.finditer(html)]
+    assert len(urls) == 2
+    assert urls[0].endswith("05.08.26-1.pdf") and urls[1].endswith("278T.pdf")
+
+
+class _FakeResp:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        pass
+
+
+class _FakeSession:
+    def __init__(self, text):
+        self._text = text
+
+    def get(self, url, timeout=None):
+        return _FakeResp(self._text)
+
+
+def test_discovery_filters_to_filer_only():
+    # The WH disclosures page lists PTRs for ALL staff; only the configured filer's
+    # filings may be ingested (everything is attributed to that member).
+    html = (
+        '<a href="/a/President-Donald-J.-Trump-Periodic-Transaction-Report-05.08.26-1.pdf">t</a>'
+        '<a href="/a/Zinberg-Joel-Periodic-Transaction-Report-03.13.26.pdf">z</a>'
+        '<a href="/a/Wiles-Susie-Periodic-Transaction-Report-06.13.25.pdf">w</a>'
+        '<a href="/a/President-Donald-J.-Trump-Periodic-Transaction-Report-4.20.26.pdf">t2</a>'
+    )
+    urls = pres.discover_filings(_FakeSession(html), {"discover_url": "https://x/"})
+    assert len(urls) == 2
+    assert all("Trump" in u for u in urls)
+    # sorted oldest-first by filename date
+    assert urls[0].endswith("4.20.26.pdf") and urls[1].endswith("05.08.26-1.pdf")
+
+
 def test_dedup_key_disambiguates_null_ticker_by_asset_name():
     # The President's bond purchases share date/amount/type with no ticker; the asset name
     # must keep them as distinct trades instead of collapsing onto one dedup_key.

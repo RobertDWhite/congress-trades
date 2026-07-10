@@ -22,18 +22,31 @@ pulls them separately and stores them as a normal member (`Donald J. Trump`,
 not real-time like Congress. OGE publishes scanned PDFs with an OCR text layer; we
 extract with `pdftotext` (OCR fallback) and parse the transactions table.
 
-OGE has no per-president index view, so filing URLs are config-driven. A seed list of
-known public 278-T filings ships in `president.py`; override or extend it via config:
+New filings are **auto-discovered** from the White House disclosures page
+(`whitehouse.gov/disclosures/` — the only public, enumerable index; OGE's Domino views
+hide the President and full-text search is disabled there), so a new PTR is picked up on
+the next run with no config change. That page serves raw scans with no usable text layer,
+so parsing them relies on the OCR fallback (`ocr.enabled`); the extapps2.oge.gov copies of
+the same filings carry an Acrobat OCR text layer and are used as the seed list. The parser
+gates rows hard (fixed OGE amount brackets, required transaction type, merged-row and
+header-noise filters), so a badly scanned filing yields nothing rather than junk and is
+marked `paper` once OCR has been tried (clear `parse_status` to re-attempt after parser
+improvements).
 
 ```yaml
 president:
   filer_name: "Donald J. Trump"   # optional (default)
   party: "R"                       # optional (default)
+  discover: true                   # optional; poll whitehouse.gov/disclosures for new PTRs
+  discover_url: "https://www.whitehouse.gov/disclosures/"   # optional override
   filings:                         # optional; falls back to the in-code seed list
     - url: "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/<UNID>/$FILE/<file>.pdf"
       disclosure_date: "2026-05-08"   # optional; parsed from the filename if omitted
 ```
 
-Add new 278-T URLs to config as OGE publishes them (searchable at extapps2.oge.gov;
-Quiver's tracker at quiverquant.com/Donald-Trump-Stock-Trades aggregates the same OGE
-filings). The `president` step also runs in the daily `refresh_all` sweep.
+Presidential trades flow through the same downstream steps as congressional ones:
+`ticker_aliases` maps equity/issuer names to tickers (bond rows are tagged
+`asset_type: bond`), which lights up returns, signals, and alert rules automatically.
+"Real-time" here is bounded by the disclosure regime itself — 278-T filings are periodic
+(30–45 day windows, sometimes late) — so freshness = polling cadence of the `president`
+step (the daily `refresh_all` sweep, plus any dedicated CronJob in whitehouse-rke2).
