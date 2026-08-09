@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import GlobalSearch from './components/GlobalSearch.jsx'
 import { WatchlistProvider } from './watchctx.jsx'
 
@@ -119,6 +119,16 @@ export default function App() {
           </Routes>
         </Suspense>
       </main>
+      <footer className="site-disclaimer">
+        <strong>Research project — not an investment strategy, and not investment advice.</strong>{' '}
+        This site exists to test whether STOCK Act disclosures can be parsed reliably from the primary
+        sources. It is not built to trade on and should not be used to make financial decisions. Nothing
+        here is a recommendation to buy or sell any security, and the author is not a licensed financial
+        advisor. Disclosures are lagged up to <strong>45 days</strong>, figures are estimates derived in
+        part from OCR and inferred tickers, and any backtest shown is hypothetical, in-sample, and
+        excludes costs and slippage. Past performance does not predict future results.{' '}
+        <Link to="/about">Methodology &amp; data</Link>
+      </footer>
     </WatchlistProvider>
   )
 }

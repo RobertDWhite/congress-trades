@@ -239,6 +239,11 @@ a:focus-visible, .btn:focus-visible, .btn-sm:focus-visible, input:focus-visible,
 .disclaimer-banner { background: var(--accent-dim); border: 1px solid var(--border); border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm); padding: 10px 14px; font-size: 12px; color: var(--muted); margin-bottom: var(--s4); }
 
+/* Persistent site-wide disclaimer, rendered on every route below <main>. */
+.site-disclaimer { max-width: 1280px; margin: var(--s4) auto 0; padding: 14px 18px 28px;
+  border-top: 1px solid var(--border); font-size: 12px; line-height: 1.6; color: var(--muted); }
+.site-disclaimer strong { color: var(--text); }
+
 /* rank medals */
 .rank { display: inline-block; width: 22px; text-align: center; font-weight: 700; color: var(--muted); }
 .rank-1 { color: #f5c518; } .rank-2 { color: #c0c0c0; } .rank-3 { color: #cd7f32; }

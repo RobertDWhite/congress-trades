@@ -40,6 +40,12 @@ export default function Dashboard() {
   return (
     <>
       <h1>Dashboard</h1>
+      <div className="disclaimer-banner">
+        <strong>Research project — not an investment strategy, and not investment advice.</strong>{' '}
+        Everything here is built from <strong>public</strong> STOCK Act disclosures, which are legal and
+        reported with a delay of up to <strong>45 days</strong>. Nothing on this site is a recommendation
+        to buy or sell, or an allegation of wrongdoing.
+      </div>
       <AiInsights defaultWindow={7} />
 
       {!stats ? <SkeletonCards n={6} /> : (
